@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS CI pipeline for abalone example
+Parameters:
+  SageMakerProjectName:
+    Type: String
+    Description: Name of the project
+    MinLength: !!int 1
+    MaxLength: !!int 32
+    AllowedPattern: ^[a-zA-Z](-*[a-zA-Z0-9])*
+  SageMakerProjectId:
+    Type: String
+    Description: Service generated Id of the project.
+  GitHubRepo:
+     Type: String
+  GitHubBranch:
+     Type: String
+  GitHubToken:
+     Type: String
+     NoEcho: true
+  GitHubUser:
+     Type: String
+  ProjectPrefix:
+    Type: String
+    Description: |
+      Unique prefix to make resource privileges scoped-limited.
+      Changing the default must be done with care
+    Default: PROJECT_PREFIX
+  ModelName:
+    Default: Abalonemodel
+    Type: String
+    Description: Name of the model
+    MinLength: 1
+    MaxLength: 15 # Limited to this due to mlops-{model}-{dev/prd}-{pipeline-executionid}
+    AllowedPattern: ^[a-z0-9](-*[a-z0-9])* # no UPPERCASE due to S3 naming restrictions
+    ConstraintDescription: Must be lowercase or numbers with a length of 1-15 characters.
+  TimeoutInMinutes:
+    Default: 30
+    Description: Train and build timeout in minutes
+    Type: String
+Resources:
+  MlOpsArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub: sagemaker-project-$(ProjectPrefix)-${SageMakerProjectId}
+      AccessControl: Private
+      VersioningConfiguration:
+        status: Enabled
+CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+              - Resource: "*"
+                Effect: Allow
+                Action:                  
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - iam:PassRole
+                  - states:DescribeStateMachine
+                  - states:StartExecution
+                  - states:DescribeExecution  
+SageMakerModelPipelineBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:
+        Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-build
+      Description: 'Builds the model building workflow code repository, creates
+        the SageMaker Pipeline and executes it'
+      ServiceRole: !GetAtt CodePipelineServiceRole.arn
+        # Fn::Join:
+        # - ':'
+        # - - arn
+        #   - Ref: 'AWS::Partition'
+        #   - iam:
+        #   - Ref: 'AWS::AccountId'
+        #   - role/service-role/AmazonSageMakerServiceCatalogProductsUseRole
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        EnvironmentVariables:
+        - Name: SAGEMAKER_PROJECT_NAME
+          Value:
+            Ref: SageMakerProjectName
+        - Name: SAGEMAKER_PROJECT_ID'
+          Value:
+            Ref: 'SageMakerProjectId'
+        - Name: 'ARTIFACT_BUCKET'
+          Value:
+            Ref: 'MlOpsArtifactsBucket'
+        - Name: 'SAGEMAKER_PIPELINE_NAME'
+          Value:
+            Fn::Sub: 'sagemaker-${SageMakerProjectName}'
+        - Name: 'SAGEMAKER_PIPELINE_ROLE_ARN'
+          Value': !GetAtt CodePipelineServiceRole.arn
+            # Fn::Join':
+            # - ':'
+            # - - 'arn'
+            #   - 'Ref': 'AWS::Partition'
+            #   - 'iam:'
+            #   - 'Ref': 'AWS::AccountId'
+            #   - 'role/service-role/AmazonSageMakerServiceCatalogProductsUseRole'
+        - Name: 'AWS_REGION'
+          Value:
+            Ref: 'AWS::Region'
+      Source:
+        Type: 'CODEPIPELINE'
+        BuildSpec: 'codebuild-buildspec.yml'
+      TimeoutInMinutes: !!int '480'
+ModelBuildPipeline:
+  Type: AWS::CodePipeline::Pipeline
+  DependsOn: 'MlOpsArtifactsBucket'
+  Properties:
+    Name: !Sub sagemaker-${SageMakerProjectName}-${SageMakerProjectId}-build
+    RoleArn: !GetAtt CodePipelineServiceRole.arn
+    ArtifactStore:
+      Type: S3
+      Location:
+        Ref: MlOpsArtifactsBucket        
+Stages:
+      - Name: GetSource
+        Actions:
+          - Name: App
+            ActionTypeId:
+              Category: Source
+              Owner: ThirdParty
+              Version: 1
+              Provider: GitHub
+            Configuration:
+              Owner: !Ref GitHubUser
+              Repo: !Ref GitHubRepo
+              Branch: !Ref GitHubBranch
+              OAuthToken: !Ref GitHubToken
+            OutputArtifacts:
+              - Name: ModelBuildSourceArtifact
+            RunOrder: 1       
+      # - 'Name': 'Source'
+      #   'Actions':
+      #   - 'Name': 'ModelBuildWorkflowCode'
+      #     'ActionTypeId':
+      #       'Category': 'Source'
+      #       'Owner': 'AWS'
+      #       'Provider': 'CodeCommit'
+      #       'Version': !!int '1'
+      #     'Configuration':
+      #       'PollForSourceChanges': !!bool 'false'
+      #       'RepositoryName':
+      #         'Fn::GetAtt': 'ModelBuildCodeCommitRepository.Name'
+      #       'BranchName': 'main'
+          
+      - 'Name': 'Build'
+        'Actions':
+        - 'Name': 'BuildAndExecuteSageMakerPipeline'
+          'ActionTypeId':
+            'Category': 'Build'
+            'Owner': 'AWS'
+            'Provider': 'CodeBuild'
+            'Version': !!int '1'
+          'InputArtifacts':
+          - 'Name': 'ModelBuildSourceArtifact'
+          'OutputArtifacts':
+          - 'Name': 'ModelBuildBuildArtifact'
+          'Configuration':
+            'ProjectName':
+              'Ref': 'SageMakerModelPipelineBuildProject'
+          'RunOrder': !!int '1'
