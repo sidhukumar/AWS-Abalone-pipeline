@@ -196,8 +196,6 @@ Resources:
       Type: AWS::CodeBuild::Project
       Properties:
         Name: Abalone-build
-        Description: 'Builds the model building workflow code repository, creates
-          the SageMaker Pipeline and executes it'
         ServiceRole: !Ref  CodeBuildServiceRole
         Artifacts:
           Type: CODEPIPELINE
@@ -239,9 +237,9 @@ Resources:
                 - Name: ModelBuildSourceArtifact
               RunOrder: 1      
             
-        - Name: ExecuteLintTest
+        - Name: Execute-Lint-test
           Actions:
-          - Name: LintTest
+          - Name: Lint-Test
             ActionTypeId:
               Category: Build
               Owner: AWS
