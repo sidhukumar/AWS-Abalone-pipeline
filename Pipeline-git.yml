@@ -18,8 +18,8 @@ Metadata:
     ParameterLabels:
       SageMakerProjectName:
         default: Model Name
-      NotebookInstanceType:
-        default: Notebook Instance Type
+      # NotebookInstanceType:
+      #   default: Notebook Instance Type
       GitHubRepo:
         default: GitHub Repository
       GitHubBranch:
@@ -36,18 +36,18 @@ Parameters:
     MinLength: !!int 1
     MaxLength: !!int 32
     AllowedPattern: ^[a-zA-Z](-*[a-zA-Z0-9])*
-  NotebookInstanceType:
-    Type: String
-    Default: ml.t3.medium
-    Description: Select Instance type for the SageMaker Notebook
-    AllowedValues:
-      - ml.t3.medium
-      - ml.t3.large
-      - ml.t3.2xlarge
-      - ml.m5.large
-      - ml.m5.xlarge
-      - ml.m5.2xlarge
-    ConstraintDescription: Must select a valid notebook instance type.
+  # NotebookInstanceType:
+  #   Type: String
+  #   Default: ml.t3.medium
+  #   Description: Select Instance type for the SageMaker Notebook
+  #   AllowedValues:
+  #     - ml.t3.medium
+  #     - ml.t3.large
+  #     - ml.t3.2xlarge
+  #     - ml.m5.large
+  #     - ml.m5.xlarge
+  #     - ml.m5.2xlarge
+  #   ConstraintDescription: Must select a valid notebook instance type.
   SageMakerProjectId:
     Type: String
     Description: Service generated Id of the project.
@@ -69,14 +69,95 @@ Parameters:
     Type: String
 
 Conditions:
-  GitHubTokenEmpty: !Equals [!Ref "GitHubToken", ""]
-
-  TimeoutInMinutes:
-    Default: 30
-    Description: Train and build timeout in minutes
-    Type: String
+  GitHubTokenEmpty: !Not 
+  - !Equals 
+   - ''
+   - !Ref GitHubToken
 
 Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Delete
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: "*"
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - ecr:GetAuthorizationToken                                         
+              - Resource: !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+              - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${Repository}
+                Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource:
+                  - !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
+                Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:PutObject
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:ListBucket
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+              - Resource: "*"
+                Effect: Allow
+                Action:                  
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - iam:PassRole
+                  - states:DescribeStateMachine
+                  - states:StartExecution
+                  - states:DescribeExecution   
+                  - kms:DescribeKey
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey*
+                  - kms:ReEncrypt*     
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -102,13 +183,8 @@ Resources:
 
   MlOpsArtifactsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName:
-        Fn::Sub: mlops-${SageMakerProjectName}-artifact-${AWS::Region}-${AWS::AccountId}
-      AccessControl: Private
-      VersioningConfiguration:
-        status: Enabled
+    DeletionPolicy: Delete
+
   GitHubSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -116,80 +192,28 @@ Resources:
       KmsKeyId: !Ref KMSKey
       SecretString: !Sub '{"username":"${GitHubUser}","password":"${GitHubToken}"}'
 
-  CodeCommitRepository:
-    Type: AWS::CodeCommit::Repository
-    Condition: GitHubTokenEmpty
-    Properties:
-      RepositoryName: !Ref GitHubRepo
-      RepositoryDescription: !Sub SageMaker Abalone pipeline for ${SageMakerProjectName}
-  SageMakerCodeRepository:
-    Type: AWS::SageMaker::CodeRepository
-    Properties:
-      CodeRepositoryName: !Ref GitHubRepo
-      GitConfig:
-        RepositoryUrl:
-          Fn::If:
-            - GitHubTokenEmpty
-            - !GetAtt CodeCommitRepository.CloneUrlHttp
-            - !Sub https://github.com/${GitHubUser}/${GitHubRepo}.git
-        Branch: !Ref GitHubBranch
-        SecretArn:
-          Fn::If:
-            - GitHubTokenEmpty
-            - !Ref "AWS::NoValue"
-            - !Ref GitHubSecret
-  NotebookInstance:
-    Type: AWS::SageMaker::NotebookInstance
-    Properties:
-      NotebookInstanceName: !Sub ${SageMakerProjectName}-notebook
-      InstanceType: !Ref NotebookInstanceType
-      #LifecycleConfigName: !GetAtt NotebookInstanceLifecycleConfig.NotebookInstanceLifecycleConfigName
-      DefaultCodeRepository: !GetAtt SageMakerCodeRepository.CodeRepositoryName
-      KmsKeyId: !Ref KMSKey
-      RoleArn: !GetAtt SageMakerRole.Arn
-
-  SageMakerModelPipelineBuildProject:
+  CodeBuildProject:
       Type: AWS::CodeBuild::Project
       Properties:
-        Name:
-          Name: !Sub $(SageMakerProjectName)-build
+        Name: Abalone-build
         Description: 'Builds the model building workflow code repository, creates
           the SageMaker Pipeline and executes it'
-        ServiceRole: !GetAtt SageMakerRole.Arn
+        ServiceRole: !Ref  CodeBuildServiceRole
         Artifacts:
           Type: CODEPIPELINE
         Environment:
           Type: LINUX_CONTAINER
           ComputeType: BUILD_GENERAL1_SMALL
           Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
-          # EnvironmentVariables:
-          # - Name: SAGEMAKER_PROJECT_NAME
-          #   Value:
-          #     Ref: SageMakerProjectName
-          # - Name: SAGEMAKER_PROJECT_ID'
-          #   Value:
-          #     Ref: 'SageMakerProjectId'
-          # - Name: 'ARTIFACT_BUCKET'
-          #   Value:
-          #     Ref: 'MlOpsArtifactsBucket'
-          # - Name: 'SAGEMAKER_PIPELINE_NAME'
-          #   Value:
-          #     Fn::Sub: 'sagemaker-${SageMakerProjectName}'
-          # - Name: 'SAGEMAKER_PIPELINE_ROLE_ARN'
-          #   Value': !GetAtt SageMakerRole.arn
-          # - Name: 'AWS_REGION'
-          #   Value:
-          #     Ref: 'AWS::Region'
         Source:
           Type: CODEPIPELINE
           BuildSpec: codebuild-buildspec.yml
-        TimeoutInMinutes: !!int 480
+        TimeoutInMinutes: 480
 
   ModelBuildPipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub ${SageMakerProjectName}
-      RoleArn: !GetAtt PipelineRole.Arn
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3
         EncryptionKey:
@@ -200,7 +224,7 @@ Resources:
       Stages:
         - Name: GitSource
           Actions:
-            - Name: App
+            - Name: Gitub-Source
               ActionTypeId:
                 Category: Source
                 Owner: ThirdParty
@@ -215,300 +239,19 @@ Resources:
                 - Name: ModelBuildSourceArtifact
               RunOrder: 1      
             
-        - Name: Build
+        - Name: Execute-Lint-test
           Actions:
-          - Name: BuildAndExecuteSageMakerPipeline
+          - Name: Lint-Test
             ActionTypeId:
               Category: Build
               Owner: AWS
               Provider: CodeBuild
-              Version: !!int '1'
+              Version: 1
             InputArtifacts:
             - Name: ModelBuildSourceArtifact
             OutputArtifacts:
             - Name: ModelBuildBuildArtifact
             Configuration:
               ProjectName:
-                Ref: SageMakerModelPipelineBuildProject
-            RunOrder: !!int '2'
-
-  CodeCommitPolicy:
-      Type: AWS::IAM::Policy
-      Condition: GitHubTokenEmpty
-      Properties:
-        PolicyName: !Sub mlops-${SageMakerProjectName}-codecommit-policy
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Sid: AlowCodeCommit
-              Effect: Allow
-              Action:
-                - codecommit:*
-              Resource: !GetAtt CodeCommitRepository.Arn
-        Roles:
-          - !Ref SageMakerRole
-          - !Ref PipelineRole
-
-  S3Policy:
-      Type: AWS::IAM::Policy
-      Properties:
-        PolicyName: !Sub mlops-${SageMakerProjectName}-s3-policy
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Sid: S3Resources
-              Effect: Allow
-              Action:
-                - s3:CreateBucket
-                - s3:GetBucket*
-                - s3:GetObject*
-                - s3:ListBucket
-                - s3:PutObject
-              Resource:
-                - arn:aws:s3:::nyc-tlc/*
-                - !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
-                - !Sub arn:aws:s3:::${MlOpsArtifactsBucket}
-                - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}/*
-                - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}
-            - Sid: AllowKms
-              Effect: Allow
-              Action:
-                - kms:DescribeKey
-                - kms:Decrypt
-                - kms:Encrypt
-                - kms:GenerateDataKey*
-                - kms:ReEncrypt*
-              Resource:
-                - !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKey}
-            - Sid: AllowLogs
-              Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: "*"
-        Roles:
-          - !Ref SageMakerRole
-          - !Ref PipelineRole
-          - !Ref MLOpsRole
-
-  SageMakerRole:
-      Type: AWS::IAM::Role
-      Properties:
-        RoleName: !Sub mlops-${SageMakerProjectName}-sagemaker-role
-        AssumeRolePolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "sagemaker.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "codebuild.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "lambda.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-        ManagedPolicyArns:
-          - "arn:aws:iam::aws:policy/CloudWatchSyntheticsFullAccess"
-        Policies:
-          - PolicyName: "mlops-sagemaker-policy"
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Sid: AllowCloudFormation
-                  Effect: Allow
-                  Action:
-                    - cloudformation:DescribeStacks
-                    - cloudformation:DescribeStackEvents
-                  Resource:
-                    - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${SageMakerProjectName}*
-                - Sid: SageMakerTesting
-                  Effect: Allow
-                  Action:
-                    - sagemaker:CreateExperiment
-                    - sagemaker:CreateTrial
-                    - sagemaker:DescribeEndpoint
-                    - sagemaker:DescribeEndpointConfig
-                    - sagemaker:DescribeMonitoringSchedule
-                    - sagemaker:DescribeProcessingJob
-                    - sagemaker:InvokeEndpoint
-                    - sagemaker:ListMonitoringExecutions
-                    - sagemaker:Search
-                  Resource: "*"
-                - Sid: AllowCodePipeline
-                  Effect: Allow
-                  Action:
-                    - codepipeline:GetPipeline
-                    - codepipeline:GetPipelineState
-                    - codepipeline:GetPipelineExecution
-                    - codepipeline:PutApprovalResult
-                    - codepipeline:PutJobFailureResult
-                    - codepipeline:PutJobSuccessResult
-                  Resource: "*"
-                - Sid: AllowCloudWatch
-                  Effect: Allow
-                  Action:
-                    - cloudwatch:PutDashboard
-                    - cloudwatch:PutMetricData
-                    - cloudwatch:PutMetricAlarm
-                    - cloudwatch:DeleteAlarms
-                    - cloudwatch:PutDashboard
-                    - cloudwatch:DeleteDashboards
-                    - iam:GetRole
-                  Resource: "*"
-                - Sid: AllowPassRoleLambda
-                  Effect: Allow
-                  Action:
-                    - iam:PassRole
-                  Resource: "*"
-                  Condition:
-                    StringEquals:
-                      iam:PassedToService: lambda.amazonaws.com
-
-  PipelineRole:
-      Type: "AWS::IAM::Role"
-      Properties:
-        RoleName: !Sub mlops-${SageMakerProjectName}-pipeline-role
-        AssumeRolePolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "codepipeline.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-        Path: "/"
-        Policies:
-          - PolicyName: "mlops-pipeline"
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Sid: CloudFormation
-                  Effect: Allow
-                  Action:
-                    - cloudformation:*
-                    - lambda:AddPermission
-                    - lambda:CreateFunction
-                    - lambda:DeleteFunction
-                    - lambda:InvokeFunction
-                  Resource: "*"
-                - Sid: CodeBuild
-                  Effect: Allow
-                  Action:
-                    - codebuild:BatchGetBuilds
-                    - codebuild:StartBuild
-                  Resource: "*"
-                - Sid: AllowPassRoleCloudFormation
-                  Effect: Allow
-                  Action:
-                    - iam:PassRole
-                  Resource: !GetAtt MLOpsRole.Arn
-
-  MLOpsRole:
-      Type: "AWS::IAM::Role"
-      Properties:
-        RoleName: !Sub mlops-${SageMakerProjectName}-deploy-role
-        AssumeRolePolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "sagemaker.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "cloudformation.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-        Path: "/"
-        Policies:
-          - PolicyName: "mlops-deploy"
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Sid: CloudFormation
-                  Effect: Allow
-                  Action:
-                    - cloudformation:*
-                    - iam:AttachRolePolicy
-                    - iam:CreateRole
-                    - iam:CreatePolicy
-                    - iam:GetRole
-                    - iam:GetRolePolicy
-                    - iam:DeleteRole
-                    - iam:DetachRolePolicy
-                    - iam:PutRolePolicy
-                    - iam:PassRole
-                    - iam:DeleteRolePolicy
-                    - iam:CreateServiceLinkedRole
-                    - lambda:InvokeFunction
-                  Resource: "*"
-                - Sid: SageMakerDeployment
-                  Effect: Allow
-                  Action:
-                    - sagemaker:CreateEndpoint
-                    - sagemaker:CreateEndpointConfig
-                    - sagemaker:CreateModel
-                    - sagemaker:DeleteEndpoint
-                    - sagemaker:DeleteEndpointConfig
-                    - sagemaker:DeleteModel
-                    - sagemaker:DescribeEndpoint
-                    - sagemaker:DescribeEndpointConfig
-                    - sagemaker:DescribeModel
-                    - sagemaker:UpdateEndpointWeightsAndCapacities
-                    - kms:CreateGrant
-                  Resource: "*"
-                - Sid: ApiDeployment
-                  Effect: Allow
-                  Action:
-                    - apigateway:*
-                    - application-autoscaling:DeregisterScalableTarget
-                    - application-autoscaling:DeleteScalingPolicy
-                    - application-autoscaling:DescribeScalingPolicies
-                    - application-autoscaling:PutScalingPolicy
-                    - application-autoscaling:DescribeScalingPolicies
-                    - application-autoscaling:RegisterScalableTarget
-                    - application-autoscaling:DescribeScalableTargets
-                    - cloudwatch:DeleteAlarms
-                    - cloudwatch:DescribeAlarms
-                    - cloudwatch:PutMetricAlarm
-                    - codedeploy:*
-                    - lambda:AddPermission
-                    - lambda:CreateAlias
-                    - lambda:CreateFunction
-                    - lambda:DeleteAlias
-                    - lambda:DeleteFunction
-                    - lambda:GetFunction
-                    - lambda:GetAlias
-                    - lambda:ListTags
-                    - lambda:ListVersionsByFunction
-                    - lambda:PublishVersion
-                    - lambda:RemovePermission
-                    - lambda:UpdateFunctionCode
-                    - lambda:UpdateFunctionConfiguration
-                    - sns:CreateTopic
-                    - sns:DeleteTopic
-                    - sns:GetTopicAttributes
-                    - sns:ListTopics
-                  Resource: "*"
-                - Sid: AllowPassRoleSageMaker
-                  Effect: Allow
-                  Action:
-                    - iam:PassRole
-                  Resource: "*"
-                  Condition:
-                    StringEquals:
-                      iam:PassedToService: sagemaker.amazonaws.com
+                Ref:CodeBuildProject
+            RunOrder: 1
