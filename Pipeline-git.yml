@@ -104,9 +104,13 @@ Resources:
               - Resource: !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
                 Effect: Allow
                 Action:
-                  - s3:GetObject
+                  - s3:CreateBucket
                   - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetBucket
+                  - s3:ListBucket
                   - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
               - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${Repository}
                 Effect: Allow
                 Action:
@@ -139,8 +143,8 @@ Resources:
                 Action:
                   - s3:CreateBucket
                   - s3:PutObject
-                  - s3:GetObject*
-                  - s3:GetBucket*
+                  - s3:GetObject
+                  - s3:GetBucket
                   - s3:ListBucket
                   - s3:GetObjectVersion
                   - s3:GetBucketVersioning
