@@ -195,7 +195,7 @@ Resources:
   CodeBuildProject:
       Type: AWS::CodeBuild::Project
       Properties:
-        Name: Abalone-build
+        Name: AbaloneBuild
         ServiceRole: !Ref  CodeBuildServiceRole
         Artifacts:
           Type: CODEPIPELINE
@@ -222,7 +222,7 @@ Resources:
       Stages:
         - Name: GitSource
           Actions:
-            - Name: Github-Source
+            - Name: AWS-Abalone-pipeline
               ActionTypeId:
                 Category: Source
                 Owner: ThirdParty
@@ -254,6 +254,6 @@ Resources:
             RunOrder: 1
 Outputs:
   PipelineUrl:
-    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
+    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ModelBuildPipeline}
   ArtifactBucket:
     Value: !Ref MlOpsArtifactsBucket          
