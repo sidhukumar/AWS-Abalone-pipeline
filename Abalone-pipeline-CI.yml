@@ -18,8 +18,6 @@ Metadata:
     ParameterLabels:
       SageMakerProjectName:
         default: Model Name
-      # NotebookInstanceType:
-      #   default: Notebook Instance Type
       GitHubRepo:
         default: GitHub Repository
       GitHubBranch:
@@ -36,18 +34,6 @@ Parameters:
     MinLength: !!int 1
     MaxLength: !!int 32
     AllowedPattern: ^[a-zA-Z](-*[a-zA-Z0-9])*
-  # NotebookInstanceType:
-  #   Type: String
-  #   Default: ml.t3.medium
-  #   Description: Select Instance type for the SageMaker Notebook
-  #   AllowedValues:
-  #     - ml.t3.medium
-  #     - ml.t3.large
-  #     - ml.t3.2xlarge
-  #     - ml.m5.large
-  #     - ml.m5.xlarge
-  #     - ml.m5.2xlarge
-  #   ConstraintDescription: Must select a valid notebook instance type.
   SageMakerProjectId:
     Type: String
     Description: Service generated Id of the project.
