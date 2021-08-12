@@ -102,7 +102,7 @@ Resources:
                   - logs:PutLogEvents
                   - ecr:GetAuthorizationToken                                         
               - Resource: 
-                  - !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
+                  - !Sub arn:aws:s3:::${ArtifactsBucket}/*
                 Effect: Allow
                 Action:
                   - s3:GetObject
@@ -135,7 +135,7 @@ Resources:
             Version: 2012-10-17
             Statement:
               - Resource:
-                  - !Sub arn:aws:s3:::${MlOpsArtifactsBucket}/*
+                  - !Sub arn:aws:s3:::${ArtifactsBucket}/*
                 Effect: Allow
                 Action:
                   - s3:CreateBucket
@@ -179,7 +179,7 @@ Resources:
       AliasName: !Sub alias/mlops-${SageMakerProjectName}
       TargetKeyId: !Ref KMSKey
 
-  MlOpsArtifactsBucket:
+  ArtifactsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
 
@@ -194,7 +194,7 @@ Resources:
       Type: AWS::CodeBuild::Project
       Properties:
         Name: AbaloneBuild
-        ServiceRole: !Ref  CodeBuildServiceRole
+        ServiceRole: !Ref CodeBuildServiceRole
         Artifacts:
           Type: CODEPIPELINE
         Environment:
@@ -212,11 +212,7 @@ Resources:
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3
-        EncryptionKey:
-          Id: !Ref KMSKey
-          Type: KMS
-        Location:
-          Ref: MlOpsArtifactsBucket        
+        Location: !Ref ArtifactsBucket        
       Stages:
         - Name: GitSource
           Actions:
@@ -254,4 +250,4 @@ Outputs:
   PipelineUrl:
     Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ModelBuildPipeline}
   ArtifactBucket:
-    Value: !Ref MlOpsArtifactsBucket          
+    Value: !Ref ArtifactsBucket          
