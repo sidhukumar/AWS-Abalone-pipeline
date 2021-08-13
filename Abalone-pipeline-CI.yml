@@ -217,7 +217,7 @@ Resources:
                 - Name: ModelBuildSourceArtifact
               RunOrder: 1      
             
-        - Name: Execute-Lint-test
+        - Name: Execute-test
           Actions:
           - Name: Lint-Test
             ActionTypeId:
@@ -232,6 +232,35 @@ Resources:
             Configuration:
               ProjectName: !Ref CodeBuildProject
             RunOrder: 1
+          - Name: Unit-Test
+            ActionTypeId:
+              Category: Build
+              Owner: AWS
+              Provider: CodeBuild
+              Version: 1
+            InputArtifacts:
+            - Name: ModelBuildSourceArtifact
+            OutputArtifacts:
+            - Name: ModelBuildArtifact
+            Configuration:
+              ProjectName: !Ref CodeBuildProject
+            RunOrder: 2
+
+        - Name: Sagemaker-Pipeline-Execution
+          Actions:
+          - Name: Execute-sagemakerpipeline
+            ActionTypeId:
+              Category: Build
+              Owner: AWS
+              Provider: CodeBuild
+              Version: 1
+            InputArtifacts:
+            - Name: ModelBuildSourceArtifact
+            OutputArtifacts:
+            - Name: BuildArtifact
+            Configuration:
+              ProjectName: !Ref CodeBuildProject
+            RunOrder: 1    
 Outputs:
   PipelineUrl:
     Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ModelBuildPipeline}

@@ -5,16 +5,30 @@ phases:
     runtime-versions:
       python: 3.8
     commands:
+      - echo "Installing requirements"
       - pip install --upgrade --force-reinstall . awscli
+      - pip install -r $CODEBUILD_SRC_DIR/pipelines/requirements.txt
+  
+  pre_build:
+    commands:
+      - echo List source files
+      - echo Get pipeline name
+      - export PIPELINE_NAME=${CODEBUILD_INITIATOR#codepipeline/}
+      - echo $PIPELINE_NAME    
   
   build:
     commands:
-      - export PYTHONUNBUFFERED=TRUE
-      - export SAGEMAKER_PROJECT_NAME_ID="${SAGEMAKER_PROJECT_NAME}-${SAGEMAKER_PROJECT_ID}"
-      - |
-        run-pipeline --module-name pipelines.abalone.pipeline \
-          --role-arn $SAGEMAKER_PIPELINE_ROLE_ARN \
-          --tags "[{\"Key\":\"sagemaker:project-name\", \"Value\":\"${SAGEMAKER_PROJECT_NAME}\"}, {\"Key\":\"sagemaker:project-id\", \"Value\":\"${SAGEMAKER_PROJECT_ID}\"}]" \
-          --kwargs "{\"region\":\"${AWS_REGION}\",\"role\":\"${SAGEMAKER_PIPELINE_ROLE_ARN}\",\"default_bucket\":\"${ARTIFACT_BUCKET}\",\"pipeline_name\":\"${SAGEMAKER_PROJECT_NAME_ID}\",\"model_package_group_name\":\"${SAGEMAKER_PROJECT_NAME_ID}\",\"base_job_prefix\":\"${SAGEMAKER_PROJECT_NAME_ID}\"}"
-      - echo "Create/Update of the SageMaker Pipeline and execution completed."
+      - flake8 --max-line-length 120 --output-file=lint-testresults.xml --format junit-xml
+      # - export PYTHONUNBUFFERED=TRUE
+      # - export SAGEMAKER_PROJECT_NAME_ID="${SAGEMAKER_PROJECT_NAME}-${SAGEMAKER_PROJECT_ID}"
+      # - |
+      #   run-pipeline --module-name pipelines.abalone.pipeline \
+      #     --role-arn $SAGEMAKER_PIPELINE_ROLE_ARN \
+      #     --tags "[{\"Key\":\"sagemaker:project-name\", \"Value\":\"${SAGEMAKER_PROJECT_NAME}\"}, {\"Key\":\"sagemaker:project-id\", \"Value\":\"${SAGEMAKER_PROJECT_ID}\"}]" \
+      #     --kwargs "{\"region\":\"${AWS_REGION}\",\"role\":\"${SAGEMAKER_PIPELINE_ROLE_ARN}\",\"default_bucket\":\"${ARTIFACT_BUCKET}\",\"pipeline_name\":\"${SAGEMAKER_PROJECT_NAME_ID}\",\"model_package_group_name\":\"${SAGEMAKER_PROJECT_NAME_ID}\",\"base_job_prefix\":\"${SAGEMAKER_PROJECT_NAME_ID}\"}"
+      # - echo "Create/Update of the SageMaker Pipeline and execution completed."
+  
+  post_build:
+    commands:
+      - echo Lint test completed    
  

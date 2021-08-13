@@ -1,0 +1,7 @@
+sagemaker>=2.1.0<3
+pytest==5.4.*
+pytest-cov==2.8.*
+requests==2.23.*
+python-dotenv==0.12.*
+flake8==3.7.*
+flake8_formatter_junit_xml==0.0.*
