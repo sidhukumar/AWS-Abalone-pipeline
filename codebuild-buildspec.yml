@@ -18,7 +18,8 @@ phases:
   
   build:
     commands:
-      - flake8 --max-line-length 120 --output-file=lint-testresults.xml --format junit-xml
+      - pylint *
+      # - flake8 --max-line-length 120 --output-file=lint-testresults.xml --format junit-xml
       # - export PYTHONUNBUFFERED=TRUE
       # - export SAGEMAKER_PROJECT_NAME_ID="${SAGEMAKER_PROJECT_NAME}-${SAGEMAKER_PROJECT_ID}"
       # - |
