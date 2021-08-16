@@ -20,7 +20,7 @@ phases:
     commands:
       - echo Build started on `date`
       - cd $CODEBUILD_SRC_DIR
-      - python -m pylint --exit-zero --reports=y --output-format=junit --jobs=0 $(find pipelines | grep '.py$') > lint_report.xml 
+      - pylint pipelines --exit-zero --reports=y --output-format=junit > lint_report.xml 
       # - flake8 --max-line-length 120 --output-file=lint-testresults.xml --format junit-xml
 
   
