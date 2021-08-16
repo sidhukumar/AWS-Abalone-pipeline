@@ -1,5 +1,6 @@
 sagemaker>=2.1.0<3
 pylint
+pylint_junit
 pytest==5.4.*
 pytest-cov==2.8.*
 requests==2.23.*
