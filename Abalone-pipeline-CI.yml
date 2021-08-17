@@ -192,6 +192,22 @@ Resources:
           BuildSpec: codebuild-buildspec.yml
         TimeoutInMinutes: 480
 
+  PipelineProject:
+      Type: AWS::CodeBuild::Project
+      Properties:
+        Name: AbaloneBuild
+        ServiceRole: !Ref CodeBuildServiceRole
+        Artifacts:
+          Type: CODEPIPELINE
+        Environment:
+          Type: LINUX_CONTAINER
+          ComputeType: BUILD_GENERAL1_SMALL
+          Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Source:
+          Type: CODEPIPELINE
+          BuildSpec: buildspec.yml
+        TimeoutInMinutes: 480      
+
   ModelBuildPipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -245,6 +261,7 @@ Resources:
             Configuration:
               ProjectName: !Ref CodeBuildProject
             RunOrder: 2
+           
 
         - Name: Sagemaker-Pipeline-Execution
           Actions:
@@ -259,7 +276,7 @@ Resources:
             OutputArtifacts:
             - Name: BuildArtifact
             Configuration:
-              ProjectName: !Ref CodeBuildProject
+              ProjectName: !Ref PipelineProject
             RunOrder: 1    
 Outputs:
   PipelineUrl:
