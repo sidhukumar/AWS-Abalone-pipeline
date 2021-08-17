@@ -195,7 +195,7 @@ Resources:
   PipelineProject:
       Type: AWS::CodeBuild::Project
       Properties:
-        Name: AbaloneBuild
+        Name: Sagemakerpipeline
         ServiceRole: !Ref CodeBuildServiceRole
         Artifacts:
           Type: CODEPIPELINE
