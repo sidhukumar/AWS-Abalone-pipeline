@@ -309,7 +309,7 @@ Resources:
       Type: AWS::CodeBuild::Project
       Properties:
         Name: Sagemakerpipeline
-        ServiceRole: !Ref CodeBuildServiceRole
+        ServiceRole: !Ref SageMakerRole
         Artifacts:
           Type: CODEPIPELINE
         Environment:
