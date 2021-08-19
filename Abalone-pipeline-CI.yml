@@ -96,9 +96,13 @@ Resources:
                   - !Sub arn:aws:s3:::${ArtifactsBucket}/*
                 Effect: Allow
                 Action:
-                  - s3:GetObject
+                  - s3:CreateBucket
                   - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetBucket
+                  - s3:ListBucket
                   - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
               - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${Repository}
                 Effect: Allow
                 Action:
@@ -400,8 +404,37 @@ Resources:
             Configuration:
               ProjectName: !Ref PipelineProject
             RunOrder: 1    
-Outputs:
-  PipelineUrl:
-    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ModelBuildPipeline}
-  ArtifactBucket:
-    Value: !Ref ArtifactsBucket          
+  S3Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${SageMakerProjectName}-s3-policy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: S3Resources
+            Effect: Allow
+            Action:
+              - s3:GetBucket*
+              - s3:GetObject*
+              - s3:PutObject
+            Resource:
+              - !Sub arn:aws:s3:::${ArtifactsBucket}/*
+              - !Sub arn:aws:s3:::${ArtifactsBucket}
+              - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}/*
+              - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}
+          - Sid: S3Bucket
+            Effect: Allow
+            Action:
+              - s3:CreateBucket
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}    
+          - Sid: AllowLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: "*"
+      Roles:
+        - !Ref SageMakerRole      
