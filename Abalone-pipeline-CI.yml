@@ -161,6 +161,7 @@ Resources:
           - Sid: AllowSageMaker
             Effect: Allow
             Action:
+              - sagemaker:CreatePipeline
               - sagemaker:CreateExperiment
               - sagemaker:CreateTrial
               - sagemaker:CreateHyperParameterTuningJob
