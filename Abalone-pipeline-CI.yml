@@ -18,6 +18,8 @@ Metadata:
     ParameterLabels:
       SageMakerProjectName:
         default: Model Name
+      Env:
+        Default: Environment  
       GitHubRepo:
         default: GitHub Repository
       GitHubBranch:
@@ -37,6 +39,9 @@ Parameters:
   SageMakerProjectId:
     Type: String
     Description: Service generated Id of the project.
+  Env:
+    Default: Dev
+    Type: String
   GitHubUser:
     Default: sidhukumar
     Description: Your GitHub username
@@ -141,7 +146,111 @@ Resources:
                   - kms:Decrypt
                   - kms:Encrypt
                   - kms:GenerateDataKey*
-                  - kms:ReEncrypt*     
+                  - kms:ReEncrypt*   
+  SageMakerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${SageMakerProjectName}-sagemaker-policy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSageMaker
+            Effect: Allow
+            Action:
+              - sagemaker:CreateExperiment
+              - sagemaker:CreateTrial
+              - sagemaker:CreateHyperParameterTuningJob
+              - sagemaker:CreateModel
+              - sagemaker:CreateProcessingJob
+              - sagemaker:CreateTrainingJob
+              - sagemaker:CreateTransformJob
+              - sagemaker:DeleteMonitoringSchedule
+              - sagemaker:DescribeTrainingJob
+              - sagemaker:DescribeHyperParameterTuningJob
+              - sagemaker:DescribeEndpoint
+              - sagemaker:DescribeEndpointConfig
+              - sagemaker:DescribeMonitoringSchedule
+              - sagemaker:DescribeProcessingJob
+              - sagemaker:DescribeTrainingJob
+              - sagemaker:DescribeTransformJob
+              - sagemaker:InvokeEndpoint
+              - sagemaker:ListTags
+              - sagemaker:ListMonitoringExecutions
+              - sagemaker:Search
+              - sagemaker:StopProcessingJob
+              - sagemaker:StopTrainingJob
+              - sagemaker:StopTransformJob
+              - kms:CreateGrant
+            Resource:
+              - !Sub arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/${SageMakerProjectName}-${Env}*
+              - !Sub arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:*/${SageMakerProjectName}-model-monitoring-*
+          - Sid: AllowSageMakerSearch
+            Effect: Allow
+            Action:
+              - sagemaker:ListMonitoringExecutions
+              - sagemaker:ListMonitoringSchedules
+              - sagemaker:Search
+            Resource: "*"
+      Roles:
+        - !Ref SageMakerRole
+
+  SageMakerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${SageMakerProjectName}-sagemaker-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "sagemaker.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "codebuild.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/CloudWatchSyntheticsFullAccess"
+      Policies:
+        - PolicyName: !Sub ${SageMakerProjectName}-sagemaker-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AllowCloudFormation
+                Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource:
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${SageMakerProjectName}-${Env}*
+              - Sid: AllowCloudWatch
+                Effect: Allow
+                Action:
+                  - cloudwatch:PutDashboard
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DeleteDashboards
+                  - iam:GetRole
+                Resource: "*"
+              - Sid: AllowCanaryPassRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    iam:PassedToService:
+                      - lambda.amazonaws.com  
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -203,6 +312,19 @@ Resources:
           Type: LINUX_CONTAINER
           ComputeType: BUILD_GENERAL1_SMALL
           Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+          EnvironmentVariables:
+          - Name: SAGEMAKER_PROJECT_NAME
+            Value: !Ref SageMakerProjectName
+          - Name: SAGEMAKER_PROJECT_ID
+            Value: !Ref SageMakerProjectId
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactsBucket
+          - Name: SAGEMAKER_PIPELINE_NAME
+            Value: !Sub sagemaker-${SageMakerProjectName}
+          - Name: SAGEMAKER_PIPELINE_ROLE_ARN
+            Value: !GetAtt SageMakerRole.Arn
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
         Source:
           Type: CODEPIPELINE
           BuildSpec: buildspec.yml
