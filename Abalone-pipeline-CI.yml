@@ -76,6 +76,12 @@ Resources:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "sagemaker.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
           - Effect: Allow
             Principal:
               Service: codebuild.amazonaws.com
@@ -161,6 +167,7 @@ Resources:
           - Sid: AllowSageMaker
             Effect: Allow
             Action:
+              - cloudformation:GetTemplateSummary
               - sagemaker:CreatePipeline
               - sagemaker:CreateExperiment
               - sagemaker:CreateTrial
@@ -198,6 +205,7 @@ Resources:
             Resource: "*"
       Roles:
         - !Ref SageMakerRole
+        - !Ref CodeBuildServiceRole
 
   SageMakerRole:
     Type: AWS::IAM::Role
@@ -206,12 +214,6 @@ Resources:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
           - Effect: "Allow"
             Principal:
               Service:
@@ -247,15 +249,7 @@ Resources:
                   - cloudwatch:DeleteDashboards
                   - iam:GetRole
                 Resource: "*"
-              - Sid: AllowCanaryPassRole
-                Effect: Allow
-                Action:
-                  - iam:PassRole
-                Resource: "*"
-                Condition:
-                  StringEquals:
-                    iam:PassedToService:
-                      - lambda.amazonaws.com  
+
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -438,4 +432,4 @@ Resources:
               - logs:PutLogEvents
             Resource: "*"
       Roles:
-        - !Ref SageMakerRole      
+        - !Ref SageMakerRole  
