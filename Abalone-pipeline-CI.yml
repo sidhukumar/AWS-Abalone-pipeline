@@ -220,6 +220,7 @@ Resources:
                 - "sagemaker.amazonaws.com"
             Action:
               - "sts:AssumeRole"
+         
           - Effect: "Allow"
             Principal:
               Service:
@@ -227,6 +228,7 @@ Resources:
             Action:
               - "sts:AssumeRole"
       ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"     
         - "arn:aws:iam::aws:policy/CloudWatchSyntheticsFullAccess"
       Policies:
         - PolicyName: !Sub ${SageMakerProjectName}-sagemaker-policy

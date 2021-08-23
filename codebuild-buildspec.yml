@@ -26,5 +26,6 @@ phases:
   
   post_build:
     commands:
+      - cat testresult.txt
       - echo Lint test completed on `date`
  
