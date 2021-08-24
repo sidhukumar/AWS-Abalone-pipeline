@@ -97,7 +97,8 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                  - ecr:GetAuthorizationToken                                         
+                  - ecr:GetAuthorizationToken  
+                  - codebuild:CreateReportGroup                                       
               - Resource: 
                   - !Sub arn:aws:s3:::${ArtifactsBucket}/*
                 Effect: Allow
@@ -151,6 +152,7 @@ Resources:
                 Action:                  
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
+                  - codebuild:CreateReportGroup
                   - iam:PassRole
                   - kms:DescribeKey
                   - kms:Decrypt
