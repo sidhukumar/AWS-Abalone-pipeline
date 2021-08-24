@@ -85,7 +85,10 @@ Resources:
           - Effect: Allow
             Principal:
               Service: codebuild.amazonaws.com
-            Action: sts:AssumeRole
+            Action: sts:AssumeRole     
+
+      # ManagedPolicyArns:
+      #   - "arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess"
       Policies:
         - PolicyName: root
           PolicyDocument:
@@ -97,8 +100,12 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                  - ecr:GetAuthorizationToken  
-                  - codebuild:CreateReportGroup                                       
+                  - ecr:GetAuthorizationToken
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                  - codebuild:BatchPutCodeCoverages                                  
               - Resource: 
                   - !Sub arn:aws:s3:::${ArtifactsBucket}/*
                 Effect: Allow
@@ -120,6 +127,14 @@ Resources:
                   - ecr:InitiateLayerUpload
                   - ecr:UploadLayerPart
                   - ecr:CompleteLayerUpload
+              - Resource: !Sub arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/CodeBuildProject
+                Effect: Allow  
+                Action:
+                  - codebuild:CreateReportGroup
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                  - codebuild:BatchPutCodeCoverages
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
