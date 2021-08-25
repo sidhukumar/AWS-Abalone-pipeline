@@ -25,13 +25,13 @@ phases:
   
   post_build:
     commands:
-      - cat tests/testresult.txt
+      #- cat tests/testresult.txt
       - echo Lint test completed on `date`
 
 reports:
   LintTests:
     files:
-      - 'tests/testresult.txt'
+      - 'lint-testresults.xml'
     discard-paths: false
     file-format: text
   
