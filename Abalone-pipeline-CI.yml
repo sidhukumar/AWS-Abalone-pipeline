@@ -86,7 +86,6 @@ Resources:
             Principal:
               Service: codebuild.amazonaws.com
             Action: sts:AssumeRole     
-
       # ManagedPolicyArns:
       #   - "arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess"
       Policies:
@@ -127,14 +126,7 @@ Resources:
                   - ecr:InitiateLayerUpload
                   - ecr:UploadLayerPart
                   - ecr:CompleteLayerUpload
-              - Resource: !Sub arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/CodeBuildProject
-                Effect: Allow  
-                Action:
-                  - codebuild:CreateReportGroup
-                  - codebuild:CreateReport
-                  - codebuild:UpdateReport
-                  - codebuild:BatchPutTestCases
-                  - codebuild:BatchPutCodeCoverages
+
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
