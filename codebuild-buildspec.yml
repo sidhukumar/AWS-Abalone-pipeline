@@ -33,6 +33,6 @@ reports:
     files:
       - 'lint-testresults.xml'
     discard-paths: false
-    file-format: text
+    file-format: JunitXml
   
  
